@@ -1,9 +1,3 @@
-
-
-
-
-
-
 /*
  *  Copyright (C) 2021 CS416 Rutgers CS
  *	Tiny File System
@@ -25,12 +19,6 @@
 #include <libgen.h>
 #include <limits.h>
 #include <math.h>
-
-
-
-
-
-
 
 #include "block.h"
 #include "tfs.h"
