@@ -72,7 +72,7 @@ int readi(uint16_t ino, struct inode *inode) {
 int writei(uint16_t ino, struct inode *inode) {
 
 	// Step 1: Get the block number where this inode resides on disk
-	
+	int iNodeBlocks = ()/
 	// Step 2: Get the offset in the block where this inode resides on disk
 
 	// Step 3: Write inode to disk 
@@ -153,6 +153,7 @@ int tfs_mkfs() {
 	sb->i_start_blk = 3;
 	sb->d_start_blk = ceil((MAX_INUM * sizeof(struct inode)) / BLOCK_SIZE);
 	bio_write(0, (void*)sb);	
+	//free sb?
 
 	// initialize inode bitmap
 	int total = ceil(MAX_INUM / 8);
@@ -409,7 +410,7 @@ int main(int argc, char *argv[]) {
 	strcat(diskfile_path, "/DISKFILE");
 
 	fuse_stat = fuse_main(argc, argv, &tfs_ope, NULL);
-
+	tfs_mkfs();
 	return fuse_stat;
 }
 
