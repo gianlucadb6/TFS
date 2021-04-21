@@ -6,6 +6,8 @@
  */
 
 #define FUSE_USE_VERSION 26
+#define IS_DIR 0
+#define IS_FILE 1
 
 #include <fuse.h>
 #include <stdlib.h>
@@ -72,10 +74,31 @@ int readi(uint16_t ino, struct inode *inode) {
 int writei(uint16_t ino, struct inode *inode) {
 
 	// Step 1: Get the block number where this inode resides on disk
-	int iNodeBlocks = ()/
+	int inodesPblock = floor(BLOCK_SIZE / sizeof(struct inode));
+	int blockNum = (int)(ino/inodesPblock); 	
+
 	// Step 2: Get the offset in the block where this inode resides on disk
+	int inodeOffset = (ino+inodesPblock) % inodesPblock;
 
 	// Step 3: Write inode to disk 
+	char* buf[BLOCK_SIZE];
+	bio_read(3+blockNum, (void*)buf);
+	//may be a simpler way to copy the ptr passed in but maybe not?
+	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
+	modiNode->ino = inode->ino;
+	modiNode->valid = inode->valid;
+	modiNode->size = inode->size;
+	modiNode->type = inode->type;
+	modiNode->link = inode->link;
+	for(int i = 0; i < 16; ++i) {
+		modiNode->direct_ptr[i] = inode->direct_ptr[i];
+	}
+	/*int indirPtr[8];
+	for(int i = 0; i < 8; ++i) {
+		modiNode->indirect_ptr[i] = inode->indirect_ptr[i];
+	}*/
+	modiNode->vstat = inode->vstat;
+	bio_write(3+blockNum, (void*)buf);
 
 	return 0;
 }
@@ -181,13 +204,16 @@ int tfs_mkfs() {
 	bio_write(1, (void*)inodeBM);	
 
 	// update inode for root directory
-	total = ceil(MAX_INUM / 8);
-	char* inodes = malloc(sizeof(total));
-	bio_read(3, inodes);
-	struct inode* rootInode = (struct inode*)&inodes[0];
-	rootInode->ino = 0;
-	//what else needs to be set for root's inode
-	bio_write(3, (void*)inodes);
+	struct inode* rootInode = malloc(sizeof(struct inode));
+	rootInode->ino = 2;
+	rootInode->valid = 1; //?
+	rootInode->size = 0; //def not right
+	rootInode->type = IS_DIR;
+	rootInode->link = 0; //?
+	//direct_ptr sould all be initially null
+	//same with indirect
+	//idk about stat?
+	writei(0, rootInode);
 
 	return 0;
 }
