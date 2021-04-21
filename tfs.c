@@ -93,10 +93,13 @@ int writei(uint16_t ino, struct inode *inode) {
 	for(int i = 0; i < 16; ++i) {
 		modiNode->direct_ptr[i] = inode->direct_ptr[i];
 	}
+
+	/*indirect otr stuff for extra credit*/
 	/*int indirPtr[8];
 	for(int i = 0; i < 8; ++i) {
 		modiNode->indirect_ptr[i] = inode->indirect_ptr[i];
 	}*/
+
 	modiNode->vstat = inode->vstat;
 	bio_write(3+blockNum, (void*)buf);
 
