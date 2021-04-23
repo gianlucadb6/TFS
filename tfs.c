@@ -195,7 +195,6 @@ int tfs_mkfs() {
 
 	// initialize inode bitmap
 	int total = ceil(MAX_INUM / 8);
-	//have to change to bitmap_t?
 	char ibm[total];
 	for(int i = 0; i < total; ++i) {
 		ibm[i] = '\0';
@@ -211,13 +210,32 @@ int tfs_mkfs() {
 	bio_write(2, (void*)dbm);
 
 	// update bitmap information for root directory
-	//update anything in data portion?
+	
+	//inode 0 set to inuse for root
 	total = ceil(MAX_INUM / 8);
-	bitmap_t inodeBM = (unsigned char*)malloc(total);; 
+	bitmap_t inodeBM = (unsigned char*)malloc(total); 
 	bio_read(1, inodeBM);
 	set_bitmap(inodeBM, 0);
-	bio_write(1, (void*)inodeBM);	
-
+	bio_write(1, (void*)inodeBM);
+	free(inodeBM);
+	//data block 0 set to inuse for root
+	total = ceil(MAX_DNUM / 8);
+	bitmap_t dataBM = (unsigned char*)malloc(total);
+	bio_read(2, dataBM);
+	set_bitmap(dataBM, 0);
+	bio_write(2, (void*)dataBM);
+	free(dataBM);
+	//partition root's data block for dirent entries
+	int numBlocksForInodes = floor(BLOCK_SIZE / sizeof(struct inode)); 
+	int rootDBlock = 3 + numBlocksForInodes;
+	char* buf[BLOCK_SIZE];
+	bio_read(rootDBlock, (void*)buf);
+	int direntsPerBlock = floor(BLOCK_SIZE/sizeof(struct dirent));
+	for(int i = 0; i < direntsPerBlock; ++i) {
+		struct dirent* entry = (struct dirent*) &(buf[i*sizeof(struct dirent)]);
+		entry->valid = -1;	
+	}
+		
 	// update inode for root directory
 	struct inode* rootInode = malloc(sizeof(struct inode));
 	rootInode->ino = 0;
@@ -226,7 +244,10 @@ int tfs_mkfs() {
 	rootInode->type = IS_DIR;
 	rootInode->link = 2; 
 	for(int i = 0; i < 16; ++i) {
-		rootInode->direct_ptr[i] = 0; //block 0 is supernode so it doesn't matter
+		if(i==0) {
+			rootInode->direct_ptr[i] = rootDBlock;
+		}
+		rootInode->direct_ptr[i] = -1;
 	}
 	time_t current_time = time(NULL);
 	rootInode->vstat.st_atime = current_time;
@@ -243,9 +264,12 @@ int tfs_mkfs() {
 static void *tfs_init(struct fuse_conn_info *conn) {
 
 	// Step 1a: If disk file is not found, call mkfs
-
+	if(dev_open(diskfile_path) < 0) {
+		tfs_mkfs();
+	}
 	// Step 1b: If disk file is found, just initialize in-memory data structures
 	// and read superblock from disk
+
 
 	return NULL;
 }
