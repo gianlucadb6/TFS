@@ -7,7 +7,7 @@
 
 #define FUSE_USE_VERSION 26
 #define IS_DIR 0
-#define IS_FILE 1
+#define IS_REG_FILE 1
 
 #include <fuse.h>
 #include <stdlib.h>
@@ -21,6 +21,7 @@
 #include <libgen.h>
 #include <limits.h>
 #include <math.h>
+#include <time.h>
 
 #include "block.h"
 #include "tfs.h"
@@ -57,14 +58,24 @@ int get_avail_ino() {
  * Get available data block number from bitmap
  */
 int get_avail_blkno() {
-
-	// Step 1: Read data block bitmap from disk
 	
-	// Step 2: Traverse data block bitmap to find an available slot
+	// Step 1: Read data bitmap from disk
+	char* buf[BLOCK_SIZE];
+	bio_read(2, (void*)buf);
+	bitmap_t* bitmap  = malloc(sizeof(bitmap_t));
+	memcpy(bitmap, buf, BLOCK_SIZE);
+	
+	// Step 2: Traverse data bitmap to find an available slot
+	int i = 0;
+	while(get_bitmap(*bitmap, i) == 1) {
+		++i;
+	}	
 
-	// Step 3: Update data block bitmap and write to disk 
-
-	return 0;
+	// Step 3: Update data bitmap and write to disk 
+	set_bitmap(*bitmap, i);
+	bio_write(2, (void*)bitmap);
+	free(bitmap);
+	return i;
 }
 
 /* 
@@ -209,14 +220,17 @@ int tfs_mkfs() {
 
 	// update inode for root directory
 	struct inode* rootInode = malloc(sizeof(struct inode));
-	rootInode->ino = 2;
-	rootInode->valid = 1; //?
-	rootInode->size = 0; //def not right
+	rootInode->ino = 0;
+	rootInode->valid = 1; 
+	rootInode->size = 0; 
 	rootInode->type = IS_DIR;
-	rootInode->link = 0; //?
-	//direct_ptr sould all be initially null
-	//same with indirect
-	//idk about stat?
+	rootInode->link = 2; 
+	for(int i = 0; i < 16; ++i) {
+		rootInode->direct_ptr[i] = 0; //block 0 is supernode so it doesn't matter
+	}
+	time_t current_time = time(NULL);
+	rootInode->vstat.st_atime = current_time;
+	rootInode->vstat.st_mtime = current_time;	
 	writei(0, rootInode);
 
 	return 0;
