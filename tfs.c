@@ -70,6 +70,10 @@ int readi(uint16_t ino, struct inode *inode) {
 	int inodeOffset = ino % inodesPblock;	
 
 	// Step 3: Read the block from disk and then copy into inode structure
+	char* buf[BLOCK_SIZE];
+	bio_read(3+blockNum, (void*)buf);
+	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
+	memcpy(inode, modiNode, sizeof(struct inode));
 
 	return 0;
 }
@@ -86,7 +90,6 @@ int writei(uint16_t ino, struct inode *inode) {
 	// Step 3: Write inode to disk 
 	char* buf[BLOCK_SIZE];
 	bio_read(3+blockNum, (void*)buf);
-	//may be a simpler way to copy the ptr passed in but maybe not?
 	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
 	memcpy(modiNode, inode, sizeof(struct inode));
 	bio_write(3+blockNum, (void*)buf);
