@@ -62,11 +62,14 @@ int get_avail_blkno() {
  */
 int readi(uint16_t ino, struct inode *inode) {
 
-  // Step 1: Get the inode's on-disk block number
+	// Step 1: Get the inode's on-disk block number
+	int inodesPblock = floor(BLOCK_SIZE / sizeof(struct inode));
+	int blockNum = (int)(ino/inodesPblock); 	
 
-  // Step 2: Get offset of the inode in the inode on-disk block
+	// Step 2: Get offset of the inode in the inode on-disk block
+	int inodeOffset = ino % inodesPblock;	
 
-  // Step 3: Read the block from disk and then copy into inode structure
+	// Step 3: Read the block from disk and then copy into inode structure
 
 	return 0;
 }
@@ -78,30 +81,33 @@ int writei(uint16_t ino, struct inode *inode) {
 	int blockNum = (int)(ino/inodesPblock); 	
 
 	// Step 2: Get the offset in the block where this inode resides on disk
-	int inodeOffset = (ino+inodesPblock) % inodesPblock;
+	int inodeOffset = ino % inodesPblock;
 
 	// Step 3: Write inode to disk 
 	char* buf[BLOCK_SIZE];
 	bio_read(3+blockNum, (void*)buf);
 	//may be a simpler way to copy the ptr passed in but maybe not?
 	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
-	modiNode->ino = inode->ino;
-	modiNode->valid = inode->valid;
-	modiNode->size = inode->size;
-	modiNode->type = inode->type;
-	modiNode->link = inode->link;
-	for(int i = 0; i < 16; ++i) {
-		modiNode->direct_ptr[i] = inode->direct_ptr[i];
-	}
-
-	/*indirect otr stuff for extra credit*/
-	/*int indirPtr[8];
-	for(int i = 0; i < 8; ++i) {
-		modiNode->indirect_ptr[i] = inode->indirect_ptr[i];
-	}*/
-
-	modiNode->vstat = inode->vstat;
+	memcpy(modiNode, inode, sizeof(struct inode));
 	bio_write(3+blockNum, (void*)buf);
+
+	/*modiNode->ino = inode->ino;
+	  modiNode->valid = inode->valid;
+	  modiNode->size = inode->size;
+	  modiNode->type = inode->type;
+	  modiNode->link = inode->link;
+	  for(int i = 0; i < 16; ++i) {
+	  modiNode->direct_ptr[i] = inode->direct_ptr[i];
+	  }
+
+	  indirect otr stuff for extra credit*/
+	/*int indirPtr[8];
+	  for(int i = 0; i < 8; ++i) {
+	  modiNode->indirect_ptr[i] = inode->indirect_ptr[i];
+	  }
+
+	  modiNode->vstat = inode->vstat;
+	 */
 
 	return 0;
 }
@@ -112,12 +118,12 @@ int writei(uint16_t ino, struct inode *inode) {
  */
 int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *dirent) {
 
-  // Step 1: Call readi() to get the inode using ino (inode number of current directory)
+	// Step 1: Call readi() to get the inode using ino (inode number of current directory)
 
-  // Step 2: Get data block of current directory from inode
+	// Step 2: Get data block of current directory from inode
 
-  // Step 3: Read directory's data block and check each directory entry.
-  //If the name matches, then copy directory entry to dirent structure
+	// Step 3: Read directory's data block and check each directory entry.
+	//If the name matches, then copy directory entry to dirent structure
 
 	return 0;
 }
@@ -125,7 +131,7 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
 int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t name_len) {
 
 	// Step 1: Read dir_inode's data block and check each directory entry of dir_inode
-	
+
 	// Step 2: Check if fname (directory name) is already used in other entries
 
 	// Step 3: Add directory entry in dir_inode's data block and write to disk
@@ -142,7 +148,7 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
 
 	// Step 1: Read dir_inode's data block and checks each directory entry of dir_inode
-	
+
 	// Step 2: Check if fname exist
 
 	// Step 3: If exist, then remove it from dir_inode's data block and write to disk
@@ -154,7 +160,7 @@ int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
  * namei operation
  */
 int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
-	
+
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
 
@@ -168,7 +174,7 @@ int tfs_mkfs() {
 
 	// Call dev_init() to initialize (Create) Diskfile
 	dev_init(diskfile_path);
-	
+
 	// write superblock information
 	struct superblock* sb = malloc(sizeof(struct superblock));
 	sb->magic_num = 6; 
@@ -189,7 +195,7 @@ int tfs_mkfs() {
 		ibm[i] = '\0';
 	}
 	bio_write(1, (void*)ibm);
-	
+
 	// initialize data block bitmap
 	total = ceil(MAX_DNUM / 8);
 	char dbm[total];
@@ -229,8 +235,8 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 
 	// Step 1a: If disk file is not found, call mkfs
 
-  // Step 1b: If disk file is found, just initialize in-memory data structures
-  // and read superblock from disk
+	// Step 1b: If disk file is found, just initialize in-memory data structures
+	// and read superblock from disk
 
 	return NULL;
 }
@@ -249,9 +255,9 @@ static int tfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Step 2: fill attribute of file into stbuf from inode
 
-		stbuf->st_mode   = S_IFDIR | 0755;
-		stbuf->st_nlink  = 2;
-		time(&stbuf->st_mtime);
+	stbuf->st_mode   = S_IFDIR | 0755;
+	stbuf->st_nlink  = 2;
+	time(&stbuf->st_mtime);
 
 	return 0;
 }
@@ -262,7 +268,7 @@ static int tfs_opendir(const char *path, struct fuse_file_info *fi) {
 
 	// Step 2: If not find, return -1
 
-    return 0;
+	return 0;
 }
 
 static int tfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
@@ -288,7 +294,7 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 	// Step 5: Update inode for target directory
 
 	// Step 6: Call writei() to write inode to disk
-	
+
 
 	return 0;
 }
@@ -313,7 +319,7 @@ static int tfs_rmdir(const char *path) {
 static int tfs_releasedir(const char *path, struct fuse_file_info *fi) {
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
-    return 0;
+	return 0;
 }
 
 static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
@@ -387,7 +393,7 @@ static int tfs_unlink(const char *path) {
 static int tfs_truncate(const char *path, off_t size) {
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
-    return 0;
+	return 0;
 }
 
 static int tfs_release(const char *path, struct fuse_file_info *fi) {
@@ -399,13 +405,13 @@ static int tfs_release(const char *path, struct fuse_file_info *fi) {
 static int tfs_flush(const char * path, struct fuse_file_info * fi) {
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
-    return 0;
+	return 0;
 }
 
 static int tfs_utimens(const char *path, const struct timespec tv[2]) {
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
-    return 0;
+	return 0;
 }
 
 
