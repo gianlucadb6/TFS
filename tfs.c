@@ -33,14 +33,24 @@ char diskfile_path[PATH_MAX];
  * Get available inode number from bitmap
  */
 int get_avail_ino() {
-
+	
 	// Step 1: Read inode bitmap from disk
+	char* buf[BLOCK_SIZE];
+	bio_read(1, (void*)buf);
+	bitmap_t* bitmap  = malloc(sizeof(bitmap_t));
+	memcpy(bitmap, buf, BLOCK_SIZE);
 	
 	// Step 2: Traverse inode bitmap to find an available slot
+	int i = 0;
+	while(get_bitmap(*bitmap, i) == 1) {
+		++i;
+	}	
 
 	// Step 3: Update inode bitmap and write to disk 
-
-	return 0;
+	set_bitmap(*bitmap, i);
+	bio_write(1, (void*)bitmap);
+	free(bitmap);
+	return i;
 }
 
 /* 
@@ -93,24 +103,6 @@ int writei(uint16_t ino, struct inode *inode) {
 	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
 	memcpy(modiNode, inode, sizeof(struct inode));
 	bio_write(3+blockNum, (void*)buf);
-
-	/*modiNode->ino = inode->ino;
-	  modiNode->valid = inode->valid;
-	  modiNode->size = inode->size;
-	  modiNode->type = inode->type;
-	  modiNode->link = inode->link;
-	  for(int i = 0; i < 16; ++i) {
-	  modiNode->direct_ptr[i] = inode->direct_ptr[i];
-	  }
-
-	  indirect otr stuff for extra credit*/
-	/*int indirPtr[8];
-	  for(int i = 0; i < 8; ++i) {
-	  modiNode->indirect_ptr[i] = inode->indirect_ptr[i];
-	  }
-
-	  modiNode->vstat = inode->vstat;
-	 */
 
 	return 0;
 }
@@ -448,7 +440,6 @@ int main(int argc, char *argv[]) {
 	strcat(diskfile_path, "/DISKFILE");
 
 	fuse_stat = fuse_main(argc, argv, &tfs_ope, NULL);
-	tfs_mkfs();
 	return fuse_stat;
 }
 
