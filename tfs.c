@@ -29,7 +29,9 @@
 char diskfile_path[PATH_MAX];
 
 // Declare your in-memory data structures here
-
+struct superblock* superBlock;
+bitmap_t* inBM;
+bitmap_t* dBM;
 /* 
  * Get available inode number from bitmap
  */
@@ -269,8 +271,8 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 	}
 	// Step 1b: If disk file is found, just initialize in-memory data structures
 	// and read superblock from disk
-
-
+	
+	
 	return NULL;
 }
 
