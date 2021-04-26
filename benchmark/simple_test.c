@@ -25,9 +25,6 @@ int main(int argc, char **argv) {
 	int i, fd = 0, ret = 0;
 	struct stat st;
 	
-	
-
-
 	if ((fd = creat(TESTDIR "/file", FILEPERM)) < 0) {
 		perror("creat");
 		printf("TEST 1: File create failure \n");

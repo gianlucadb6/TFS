@@ -171,7 +171,12 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
-
+	int i = 1;
+	while(path[i] != '/') {
+		++i;
+	}
+	char* fname = malloc(sizeof(char)*i);
+	strncpy(fname, path, i);
 	return 0;
 }
 
@@ -271,7 +276,8 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 	}
 	// Step 1b: If disk file is found, just initialize in-memory data structures
 	// and read superblock from disk
-	
+	bio_read(0, (void*)superBlock);
+		
 	
 	return NULL;
 }
@@ -287,7 +293,8 @@ static void tfs_destroy(void *userdata) {
 static int tfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Step 1: call get_node_by_path() to get inode from path
-
+	//get_node_by_path(path);
+	
 	// Step 2: fill attribute of file into stbuf from inode
 
 	stbuf->st_mode   = S_IFDIR | 0755;
