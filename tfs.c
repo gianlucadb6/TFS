@@ -30,6 +30,7 @@ char diskfile_path[PATH_MAX];
 
 // Declare your in-memory data structures here
 struct superblock* superBlock;
+struct inode* rootInode;
 bitmap_t* inBM;
 bitmap_t* dBM;
 /* 
@@ -38,9 +39,9 @@ bitmap_t* dBM;
 int get_avail_ino() {
 	
 	// Step 1: Read inode bitmap from disk
-	char* buf[BLOCK_SIZE];
+	char buf[BLOCK_SIZE];
 	bio_read(1, (void*)buf);
-	bitmap_t* bitmap  = malloc(sizeof(bitmap_t));
+	bitmap_t* bitmap  = malloc(BLOCK_SIZE);
 	memcpy(bitmap, buf, BLOCK_SIZE);
 	
 	// Step 2: Traverse inode bitmap to find an available slot
@@ -62,9 +63,9 @@ int get_avail_ino() {
 int get_avail_blkno() {
 	
 	// Step 1: Read data bitmap from disk
-	char* buf[BLOCK_SIZE];
+	char buf[BLOCK_SIZE];
 	bio_read(2, (void*)buf);
-	bitmap_t* bitmap  = malloc(sizeof(bitmap_t));
+	bitmap_t* bitmap  = malloc(BLOCK_SIZE);
 	memcpy(bitmap, buf, BLOCK_SIZE);
 	
 	// Step 2: Traverse data bitmap to find an available slot
@@ -87,13 +88,14 @@ int readi(uint16_t ino, struct inode *inode) {
 
 	// Step 1: Get the inode's on-disk block number
 	int inodesPblock = floor(BLOCK_SIZE / sizeof(struct inode));
-	int blockNum = (int)(ino/inodesPblock); 	
+	int blockNum = (int)(ino/inodesPblock);
+	//int n = (ino * sizeof(struct inode))/BLOCK_SIZE floored?^^^ 	
 
 	// Step 2: Get offset of the inode in the inode on-disk block
 	int inodeOffset = ino % inodesPblock;	
 
 	// Step 3: Read the block from disk and then copy into inode structure
-	char* buf[BLOCK_SIZE];
+	char buf[BLOCK_SIZE];
 	bio_read(3+blockNum, (void*)buf);
 	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
 	memcpy(inode, modiNode, sizeof(struct inode));
@@ -111,7 +113,7 @@ int writei(uint16_t ino, struct inode *inode) {
 	int inodeOffset = ino % inodesPblock;
 
 	// Step 3: Write inode to disk 
-	char* buf[BLOCK_SIZE];
+	char buf[BLOCK_SIZE];
 	bio_read(3+blockNum, (void*)buf);
 	struct inode* modiNode = (struct inode*) &(buf[inodeOffset*sizeof(struct inode)]);
 	memcpy(modiNode, inode, sizeof(struct inode));
@@ -127,13 +129,32 @@ int writei(uint16_t ino, struct inode *inode) {
 int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *dirent) {
 
 	// Step 1: Call readi() to get the inode using ino (inode number of current directory)
-
+	struct inode* in = malloc(sizeof(struct inode));
+	readi(ino, in);
+	
 	// Step 2: Get data block of current directory from inode
+	int i;
+	int numDirent = floor(BLOCK_SIZE/sizeof(struct dirent));
+	for(i = 0; i < 16; ++i) {
+		int block = in->direct_ptr[i];
+		char buf[BLOCK_SIZE];
+		bio_read(block, (void*)buf);
+		int j;
+		
+		// Step 3: Read directory's data block and check each directory entry.
+		//If the name matches, then copy directory entry to dirent structure
+		for(j = 0; j < numDirent; ++j) {
+			struct dirent* d = (struct dirent*) &(buf[sizeof(struct dirent) * i]); 
+			if(name_len == d->len) {
+				if(strcmp(fname, d->name) == 0) {
+					memcpy(dirent, d, sizeof(struct dirent));
+					return 0;
+				}
+			}
+		}
+	}
 
-	// Step 3: Read directory's data block and check each directory entry.
-	//If the name matches, then copy directory entry to dirent structure
-
-	return 0;
+	return -1;
 }
 
 int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t name_len) {
@@ -171,12 +192,24 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
-	int i = 1;
-	while(path[i] != '/') {
+	int i = 0;
+	while(path[i] != '/' || path[i] != '\0') {
 		++i;
 	}
-	char* fname = malloc(sizeof(char)*i);
-	strncpy(fname, path, i);
+	char* fname = malloc(sizeof(char)*(i+1));
+	strncpy(fname, path, i);	
+	struct dirent* dir = malloc(sizeof(struct dirent));
+	if(dir_find(ino, fname, strlen(fname), dir) < 0) {
+		return -1;	
+	}
+	struct inode* in = malloc(sizeof(struct inode));
+	readi(dir->ino, in);
+	if(in->type == IS_REG_FILE) {
+		memcpy(inode, in, sizeof(struct inode));
+	}else {
+		path += i + 1;
+		get_node_by_path(path, dir->ino, inode);
+	}
 	return 0;
 }
 
@@ -196,13 +229,13 @@ int tfs_mkfs() {
 	sb->i_bitmap_blk = 1;
 	sb->d_bitmap_blk = 2;
 	sb->i_start_blk = 3;
-	sb->d_start_blk = ceil((MAX_INUM * sizeof(struct inode)) / BLOCK_SIZE);
+	sb->d_start_blk = 3 + ceil((MAX_INUM * sizeof(struct inode)) / BLOCK_SIZE);
 	bio_write(0, (void*)sb);	
 	//free sb?
 
 	// initialize inode bitmap
 	int total = ceil(MAX_INUM / 8);
-	char ibm[total];
+	char ibm[total];//dynamically allocate?
 	for(int i = 0; i < total; ++i) {
 		ibm[i] = '\0';
 	}
@@ -210,14 +243,14 @@ int tfs_mkfs() {
 
 	// initialize data block bitmap
 	total = ceil(MAX_DNUM / 8);
-	char dbm[total];
+	char dbm[total];//dynam?
 	for(int i = 0; i < total; ++i) {
 		dbm[i] = '\0';
 	}
 	bio_write(2, (void*)dbm);
 
 	// update bitmap information for root directory
-	
+
 	//inode 0 set to inuse for root
 	total = ceil(MAX_INUM / 8);
 	bitmap_t inodeBM = (unsigned char*)malloc(total); 
@@ -242,7 +275,7 @@ int tfs_mkfs() {
 		struct dirent* entry = (struct dirent*) &(buf[i*sizeof(struct dirent)]);
 		entry->valid = -1;	
 	}
-		
+
 	// update inode for root directory
 	struct inode* rootInode = malloc(sizeof(struct inode));
 	rootInode->ino = 0;
@@ -277,8 +310,8 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 	// Step 1b: If disk file is found, just initialize in-memory data structures
 	// and read superblock from disk
 	bio_read(0, (void*)superBlock);
-		
-	
+
+
 	return NULL;
 }
 
@@ -294,7 +327,7 @@ static int tfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Step 1: call get_node_by_path() to get inode from path
 	//get_node_by_path(path);
-	
+
 	// Step 2: fill attribute of file into stbuf from inode
 
 	stbuf->st_mode   = S_IFDIR | 0755;
