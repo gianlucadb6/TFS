@@ -33,6 +33,7 @@ struct superblock* superBlock;
 struct inode* rootInode;
 bitmap_t* inBM;
 bitmap_t* dBM;
+
 /* 
  * Get available inode number from bitmap
  */
@@ -326,13 +327,17 @@ static void tfs_destroy(void *userdata) {
 static int tfs_getattr(const char *path, struct stat *stbuf) {
 
 	// Step 1: call get_node_by_path() to get inode from path
-	//get_node_by_path(path);
+	struct inode* inode = malloc(sizeof(struct inode));
+	get_node_by_path(path, 0, inode);
 
 	// Step 2: fill attribute of file into stbuf from inode
-
-	stbuf->st_mode   = S_IFDIR | 0755;
-	stbuf->st_nlink  = 2;
-	time(&stbuf->st_mtime);
+	stbuf->st_mode = inode->vstat.st_mode;
+	stbuf->st_nlink = inode->vstat.st_nlink;
+	stbuf->st_uid = inode->vstat.st_uid;
+	stbuf->st_gid = inode->vstat.st_gid;
+	stbuf->st_size = inode->vstat.st_size;
+	stbuf->st_mode = inode->vstat.st_size;
+	time(&stbuf->st_mtime); //?
 
 	return 0;
 }
@@ -399,6 +404,7 @@ static int tfs_releasedir(const char *path, struct fuse_file_info *fi) {
 
 static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 
+	printf("yo\n");
 	// Step 1: Use dirname() and basename() to separate parent directory path and target file name
 
 	// Step 2: Call get_node_by_path() to get inode of parent directory
@@ -515,6 +521,7 @@ static struct fuse_operations tfs_ope = {
 
 
 int main(int argc, char *argv[]) {
+	printf("in tfs.c main\n");
 	int fuse_stat;
 	getcwd(diskfile_path, PATH_MAX);
 	strcat(diskfile_path, "/DISKFILE");
